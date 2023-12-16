@@ -28,7 +28,7 @@ var tasks = map[string]Task{
 	},
 	"2": {
 		ID:          "2",
-		Description: "Протестировать финальное задание с помощью Postmen",
+		Description: "Протестировать финальное задание с помощью Postman",
 		Note:        "Лучше это делать в процессе разработки, каждый раз, когда запускаешь сервер и проверяешь хендлер",
 		Applications: []string{
 			"VS Code",
@@ -44,34 +44,39 @@ func getTasks(write http.ResponseWriter, read *http.Request) {
 	response, err := json.Marshal(tasks)
 
 	if err != nil {
-		http.Error(write, err.Error(), 500)
+		http.Error(write, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	write.Header().Set("Content-Type", "application/json")
-	write.WriteHeader(200)
+	write.WriteHeader(http.StatusOK)
 	write.Write(response)
 }
 
-func postTask(write http.ResponseWriter, read *http.Request) {
+func createTask(write http.ResponseWriter, read *http.Request) {
 	var newTask Task
 	var buf bytes.Buffer
 	_, err := buf.ReadFrom(read.Body)
 
 	if err != nil {
-		http.Error(write, err.Error(), 400)
+		http.Error(write, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(buf.Bytes(), &newTask); err != nil {
-		http.Error(write, err.Error(), 400)
+		http.Error(write, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if _, ok := tasks[newTask.ID]; ok {
+		http.Error(write, "Task with this ID already exists", http.StatusBadRequest)
 		return
 	}
 
 	tasks[newTask.ID] = newTask
 
 	write.Header().Set("Content-Type", "application/json")
-	write.WriteHeader(201)
+	write.WriteHeader(http.StatusCreated)
 }
 
 func getTaskById(write http.ResponseWriter, read *http.Request) {
@@ -79,19 +84,19 @@ func getTaskById(write http.ResponseWriter, read *http.Request) {
 	task, ok := tasks[id]
 
 	if !ok {
-		http.Error(write, "400 Bad Request", 400)
+		http.Error(write, "400 Bad Request", http.StatusBadRequest)
 		return
 	}
 
 	response, err := json.Marshal(task)
 
 	if err != nil {
-		http.Error(write, err.Error(), 400)
+		http.Error(write, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	write.Header().Set("Content-Type", "application/json")
-	write.WriteHeader(200)
+	write.WriteHeader(http.StatusOK)
 	write.Write(response)
 }
 
@@ -100,12 +105,12 @@ func deleteTaskById(write http.ResponseWriter, read *http.Request) {
 	_, ok := tasks[id]
 
 	if !ok {
-		http.Error(write, "400 Bad Request", 400)
+		http.Error(write, "400 Bad Request", http.StatusBadRequest)
 		return
 	}
 
 	delete(tasks, id)
-	write.WriteHeader(200)
+	write.WriteHeader(http.StatusOK)
 }
 
 func main() {
@@ -113,7 +118,7 @@ func main() {
 	read := chi.NewRouter()
 	read.Get("/tasks/{id}", getTaskById)
 	read.Get("/tasks", getTasks)
-	read.Post("/tasks", postTask)
+	read.Post("/tasks", createTask)
 	read.Delete("/tasks/{id}", deleteTaskById)
 
 	if err := http.ListenAndServe(":8080", read); err != nil {
